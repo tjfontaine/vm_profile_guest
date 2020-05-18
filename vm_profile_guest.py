@@ -37,6 +37,8 @@ profile-{profile_interval}
                     if 'kvm-vcpu' in os.readlink(os.path.join(root, fdroot, f)):
                         vcpu_fds[f] = True
 
+        return vcpu_fds
+
     def find_base_address(self):
         # TODO serious hack, we *should* be able to use the kvm->memslots or
         # kvm->mm to deduce this information in the dtrace probe itself, but
