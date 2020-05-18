@@ -268,8 +268,36 @@ tick-{duration}s
 }}
 """
 
+class Symbols:
+    def __init__(self, symbol_file=None):
+        self.symbols = {}
+        self.symbol_keys = []
 
-def process_line(stacks, symbol_keys, symbols, line):
+        with open(symbol_file, 'r') as symfile:
+            for line in symfile.readlines():
+                parts = line.strip().split()
+                if len(parts) < 3:
+                    continue
+                self.symbols[int(parts[0], 16)] = parts[2]
+            self.symbol_keys = list(self.symbols.keys())
+            self.symbol_keys.sort()
+
+    def map_address(self, addr):
+        if len(self.symbol_keys):
+            loc = bisect.bisect_right(self.symbol_keys, addr)
+
+            if not loc:
+                return "{:x}".format(addr)
+
+            symkey = self.symbol_keys[loc - 1]
+            symname = self.symbols[symkey]
+
+            return "{}+{:x}".format(symname, addr - symkey)
+        else:
+            return "{:x}".format(addr)
+
+
+def process_line(stacks, symbols, line):
     line = line.strip()
 
     if line == '':
@@ -298,18 +326,7 @@ def process_line(stacks, symbol_keys, symbols, line):
 
     addr = int(line, 16)
 
-    if len(symbol_keys):
-        loc = bisect.bisect_right(symbol_keys, addr)
-
-        if not loc:
-            print(line)
-
-        symkey = symbol_keys[loc - 1]
-
-        symname = symbols[symkey]
-        stack.append("{}+{:x}".format(symbols[symkey], addr - symkey))
-    else:
-        stack.append("{}".format(line))
+    stack.append(symbols.map_address(addr))
 
 
 if __name__ == '__main__':
@@ -357,16 +374,7 @@ if __name__ == '__main__':
     else:
         base_memory_addr = args.base_address
 
-    symbols = {}
-    if args.symbol_file:
-        symfile = open(args.symbol_file, 'r')
-        for line in symfile.readlines():
-            parts = line.strip().split()
-            if len(parts) < 3:
-                continue
-            symbols[int(parts[0], 16)] = parts[2]
-    symbol_keys = list(symbols.keys())
-    symbol_keys.sort()
+    symbols = Symbols(symbol_file=args.symbol_file)
 
     args = args.__dict__
 
@@ -406,10 +414,10 @@ if __name__ == '__main__':
         if line == '':
             break
 
-        process_line(stacks, symbol_keys, symbols, line)
+        process_line(stacks, symbols, line)
 
     for line in child.stdout.readlines():
-        process_line(stacks, symbol_keys, symbols, line)
+        process_line(stacks, symbols, line)
 
     for tid, stack in list(stacks.items()):
         if len(stack):
