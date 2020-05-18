@@ -192,7 +192,6 @@ profile-997
             return Darwin.dtraceBase_common + Darwin.dtraceBase_mojave
 
     def find_base_address(self):
-        import re
         # VM_ALLOCATE            0000000117de6000-000000011fde6000 [128.0M 128.0M 128.0M     0K] rw-/rwx SM=ALI
         VM_REG = r"^VM_ALLOCATE\s+([a-f0-9]+)-([a-f0-9]+)\s+\[([0-9.MKG]+)\s+([0-9.MKG]+)\s+([0-9.MKG]+)\s+([0-9.MKG]+)\]\s+rw-/rwx\s+SM=ALI"
 
@@ -268,6 +267,7 @@ tick-{duration}s
 }}
 """
 
+
 class Symbols:
     def __init__(self, symbol_file=None):
         self.symbols = {}
@@ -335,6 +335,7 @@ if __name__ == '__main__':
     import os
     import os.path
     import platform
+    import re
     import subprocess
     import sys
     import tempfile
