@@ -66,11 +66,6 @@ profile-{profile_interval}
         base_memory_addr = hex(mapsizes[sizes.pop()])
         return base_memory_addr
 
-# current impl mojave
-# catalina, offset to regs in cpu_state seems to now be 0x780
-# offset to cpu_state appears to be 0x30, which would be the same
-# offset to vcpu set seems to still be 0x40
-
 
 class Darwin:
     dtraceBase_common = """
