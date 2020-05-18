@@ -344,8 +344,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--pid', help="PID of QEMU process to profile",
                         required=True)
-    parser.add_argument('--vcpu_count', help="The number of VCPUs to profile",
-                        default=1)
     parser.add_argument('--symbol_file',
                         help="Optional symbol file for name resolution")
     parser.add_argument('--frame_count', help="Number of frames to walk",
