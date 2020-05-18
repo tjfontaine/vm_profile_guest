@@ -1,7 +1,14 @@
-## Profiling KVM Guests with DTrace
+# Profiling VM Guests with DTrace
 
-Given a Linux environment that has DTrace and KVM you can walk arbitrary VCPU's
-for their stack traces and print them. Tested on OracleLinux 7.2.
+Given a Linux or macOS environment that has DTrace and `KVM` or
+`Hypervisor.framework` respectively, you can print stack traces for their
+vCPU's.  Tested with QEMU on macOS Mojave and Catalina (`-accel hvf`), as well
+as Oracle Linux 7 with UEK5 (`-enable-kvm`). If you supply a symbol file in the
+format used by `nm`, addresses (if found) will be resolved into their
+appropriate symbol name. The output can be used with tools for producing Flame
+Graphs.
+
+## Usage
 
 ```
 usage: vm_profile_guest.py [-h] --pid PID [--symbol_file SYMBOL_FILE]
@@ -26,7 +33,10 @@ optional arguments:
                         base address value
 ```
 
-Output:
+## Output
+
+Here is the output of a [rumpkernel](https://github.com/rumpkernel/rumprun)
+running the [nginx package](https://github.com/rumpkernel/rumprun-packages):
 
 ```
 cpu_intr_ack+a
@@ -72,3 +82,77 @@ pthread__create_tramp+6e
 bmk_cpu_sched_bouncer+b
 1
 ```
+
+The format is ready to be used with tools for producing [Flame
+Graphs](http://www.brendangregg.com/flamegraphs.html) such as can be found in
+Brendan Gregg's [tools](https://github.com/brendangregg/FlameGraph).
+
+## Caveats and Assumptions
+
+### Frame Pointers
+
+In order to walk the stack this tool assumes the guest has preserved frame
+pointers. That is to say it's been compiled with `-fno-omit-frame-pointer`.
+This is crucial, if `RBP` isn't in fact the base pointer, you will not get
+sensical information from this tool. Suffice it to say, compilers no longer
+preserve frame pointers by default, so you'll need to make sure you have this
+covered.
+
+### Address Spaces
+
+Normally for DTrace one only has to think about `kernel` and `user` address
+spaces, and to remember that DTrace is operating in the `kernel` and so you may
+need to `copyin` to the kernel addresse space from `user` space.
+
+But when profiling a Virtual Machine one must also be aware of the addressing
+within that guest machine.
+
+The demo above demonstrates using the tool against a Unikernel running inside
+the VM. This greatly simplifies the effort needed to produce a stack trace
+because we can assume the unikernel has a single unified address layout. That
+is to say, the guest doesn't have its own notion of `kernel` and `user` address
+spaces.
+
+Keep in mind that DTrace has strict requirements regarding loops and branching,
+so if you want to be able to profile a full stack from a guest running a more
+complicated (useful?) operating system, you'll need to be able to resolve
+"easily" `guest-user` space addresses into `host-user` addresses such that they
+can be `copyin`'d and the stack can be walked.
+
+Also, DTrace requires the memory for the guest to be paged in for the `copyin`
+to work, it's possible that given your `VMM` this may not be the case. If the
+script is failing with multiple errors about not being able to `copyin` an
+address, and you're using `qemu` try using the flag `-mem-prealloc` (though
+this could also be representative of missing frame pointers).
+
+### macOS
+
+For this tool to work you must have SIP configured to allow _both_ DTrace *and*
+Debugging (because we want DTrace to _attach_ to the process). As such, that
+means you need to boot into restore mode and from a terminal issue the
+following command: `csrutil enable --without dtrace --without debug`
+
+The ability to trace a guest running on `Hypervisor.framework` is (putting it
+lightly) very fragile, perhaps even more fragile than the notion of walking a
+stack of a running virtual machine. While there is enough `CTF` in Apple's
+kernel to identify `hv_thread_target` and `hv_task_target`, they are merely
+mapped to `void*` instead of their more concrete types. This is to be expected,
+as they're largely an implementation detail and no rational person should be
+depending on the layout of any of the related structures. But yet, here we are.
+
+To that end, through a combination of reverse engineering `AppleHV.kext`,
+DTrace's `tracemem`, and a version of [Philipp Oppermann's Rust
+OS](https://github.com/phil-opp/blog_os/tree/post-02) we were able to deduce
+enough about the structures to make this tool work.
+
+That being said, Apple can (and will?) change any of these layouts at any time,
+certainly between major releases but also within a patch (though the latter is
+less likely).
+
+Regarding `Hypervisor.framework`'s `hv_vcpu_read_register()`, first given
+DTrace's design center it can't call a user space function (which is a good
+thing).  Second, while it's possible to implement the same logic from
+`Hypervisor.framework`, you're dealing with `user` addresses, which makes it
+difficult to reason about the addresses in question, and unnecessary since
+there is a `kernel` address sitting in `curthread` and `curtask` just waiting
+for your usage.
